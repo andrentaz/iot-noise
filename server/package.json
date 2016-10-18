@@ -1,0 +1,27 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "simples server to post json files into csv files",
+  "main": "server.js",
+  "scripts": {
+    "test": "node server.js",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrentaz/iot-noise.git"
+  },
+  "keywords": [
+    "noise",
+    "iot",
+    "arduino",
+    "json",
+    "csv"
+  ],
+  "author": "Andre Nakagaki Filliettaz",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/andrentaz/iot-noise/issues"
+  },
+  "homepage": "https://github.com/andrentaz/iot-noise#readme"
+}
