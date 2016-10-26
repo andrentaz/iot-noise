@@ -6,9 +6,9 @@
 #define PIN_MIC A0
 #define PIN_RX 2    // RX pin of arduino
 #define PIN_TX 3    // TX pin of arduino
+#define PIN_RST 10  // Reset pin of ESP8266
 // Data
 #define ID "1"
-#define JSON_MODEL "{\"id\":\"%d\" , \"vreff\":\"%g\" , \"tmp\":\"%l\" , \"spl\":\"%s\"}"
 
 #define DEBUG true
 
@@ -21,7 +21,7 @@ const int nrows = 2;
 // Network
 const String WLAN_SSID = "SSID";
 const String WLAN_PASS = "PASS";
-const String SERVER_ADDR = "192.168.0.3";   // internal network
+const String SERVER_ADDR = "192.168.0.3";
 const long SERVER_PORT = 8080;
 
 // Global
@@ -40,7 +40,7 @@ void setup() {
     lcdSetup();
 
     while (!Serial);
-    lcdPrint("Connecting...", 0, 2000, false);
+    lcdPrint("Connecting...", 0, 2000, true);
     resetWifi();
     connectWifi();
 }
@@ -55,8 +55,14 @@ void loop() {
     // send data to the server
     if (count > 50) {
         sendScreen();
-        lcdPrint("Sending...", 0, 2000, false);
-        sendToServer(spl);
+        Serial.flush();
+        lcdPrint("Sending...", 0, 2000, true);
+        if (checkAlive()) {
+            sendToServer(spl);
+        } else {
+            hardReset();
+            connectWifi();
+        }
         count = 0;
     } else {
         // write in the lcd
@@ -65,6 +71,9 @@ void loop() {
     count++;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Sound functions */
+/* -------------------------------------------------------------------------- */
 /* Read a <SAMPLE> values from the mic and calculate the avarage */
 float soundSampling(int anPort) {
     float avg = 0.0f;
@@ -85,111 +94,121 @@ float calculateDecibels(float value) {
     return (20 * log10(vreff));
 }
 
-void resetWifi(void) {  
-    ATCommand("AT+RST\r\n", 5000, DEBUG);
-    ATCommand("AT+CWMODE=1\r\n", 3000, DEBUG);
-    ATCommand("AT+CIPMUX=0\r\n", 3000, DEBUG);
+/* -------------------------------------------------------------------------- */
+/* ESP8266 API */ 
+/* -------------------------------------------------------------------------- */
+void resetWifi(void) {
+    digitalWrite(PIN_RST, HIGH);
+    delay(1000);
+    ATCommand("AT+RST\r\n", "RST", 5000, DEBUG);
+    ATCommand("AT+CWMODE=1\r\n", "CWMODE=1", 3000, DEBUG);
+    ATCommand("AT+CIPMUX=0\r\n", "CIPMUX=0", 3000, DEBUG);
 }
 
 void connectWifi() {
-    String cmd = "AT+CWJAP=\"" + WLAN_SSID + "\",\"" + WLAN_PASS + "\"\r\n";
-    ATCommand(cmd, 10000, DEBUG);
+    String cmd = "AT+CWJAP=\"";
+    cmd += WLAN_SSID;   cmd += "\",\"";
+    cmd += WLAN_PASS;   cmd += "\"\r\n";
+    ATCommand(cmd, "CWJAP", 10000, DEBUG);
 }
 
 void sendToServer(float value) {
     String valueStr = "";
+    String vreff = "";
+    String json = "";
     valueStr += value;
+    vreff += VBASE;
 
-    lcdPrint(valueStr + "dB", 1, 2000, true);
-
-    char buffer[1024] = { '\0' };
+    lcdPrint("SPL: " + valueStr, 0, 2000, true);
 
     // Start the connection
-    String cmd = "AT+CIPSTART=\"TCP\",\"" + SERVER_ADDR + "\"," + SERVER_PORT;
-    cmd += "\r\n";
-    lcdPrint("CIPSTART", SERVER_ADDR + " " + SERVER_PORT, 2000, false);
+    String cmd = "AT+CIPSTART=\"TCP\",\"";
+    cmd += SERVER_ADDR; cmd += "\",";
+    cmd += SERVER_PORT; cmd += "\r\n";
+    lcdPrint("CIPSTART", SERVER_ADDR+":"+SERVER_PORT,1000,false);
     Wifi.print(cmd);
     delay(10000);
 
     if (Wifi.find("OK")) {
         lcdPrint("TCP conn OK!", 0, 2000, true);
-        Wifi.flush();
         
         // prepare command to send
         cmd = "AT+CIPSEND=";
 
         // prepare JSON data
-        sprintf(buffer, JSON_MODEL, ID, VBASE, millis(), valueStr.c_str());
+        json = "{\"id\":\"";
+        json += ID;
+        json += "\",\"vreff\":\"" + vreff;
+        json += "\",\"tmp\":\"";
+        json += millis();
+        json += "\",\"spl\":\"";
+        json += valueStr;
+        json += "\"}";
+        
+        int len = json.length();
 
         // prepare POST String
         String postRequest = "POST /csv/upload HTTP/1.1\r\n";
         postRequest += "Host: " + SERVER_ADDR;
         postRequest += "\r\n";
-        postRequest += "Accept: */* \r\n";
-        postRequest += "Content-Length: " + strlen(buffer);
+        postRequest += "Content-Length: ";
+        postRequest += len;
         postRequest += "\r\n";
         postRequest += "Content-Type: application/json\r\n\r\n";
 
-        postRequest += buffer;
-        postRequest += "\r\n";
+        postRequest += json;
+        postRequest += "\r\n\r\n";
 
-        cmd += postRequest.length();
+        cmd += strlen(postRequest.c_str());
         cmd += "\r\n";
 
         // Send the command
-        Serial.print(cmd);
+        lcdPrint("CIPSEND", strlen(postRequest.c_str()), 1000, false);
         Wifi.print(cmd);
-        delay(10000);
+        delay(5000);
 
+        // Server is waiting for data
         if (Wifi.find(">")) {
+            flush(Wifi);
             // Start the sending process
-            Serial.print("Sending data... [");  Serial.print(millis()); 
-            lcdPrint("]", 0, 2000, true);
+            lcdPrint("Sending...", millis(), 2000, false);
 
             // Send data
-            lcdPrint(postRequest, 0, 2000, true);
+            // ATCommand(postRequest, "POST", 20000, DEBUG);
             Wifi.print(postRequest);
-            delay(10000);
-
-
-            if (Wifi.find("SEND OK")) {
-                lcdPrint("Package Sent!", 0, 2000, true);
-
-                while(Wifi.available()) {
-                    String response = Wifi.readString();
-                    lcdPrint(response, 0, 2000, true);
-                }
-
-            } else {
-                lcdPrint("Unable to send", 0, 2000, true);
-                Wifi.flush();
-            }
+            delay(20000);
 
             // Log the ending
-            Serial.print("Ending... [");    Serial.print(millis());
-            lcdPrint("]", 0, 2000, true);
-            lcdPrint(buffer, 0, 2000, true);
+            lcdPrint("Ending...", millis(), 2000, false);
 
             delay(100);
         } else {
             lcdPrint("Send Problems", 0, 2000, true);
-            Wifi.flush();
+            flush(Wifi);
         }
         
-        ATCommand("AT+CIPCLOSE\r\n", 10000, DEBUG);
+        String res = ATCommand("AT+CIPCLOSE\r\n", "CIPCLOSE", 5000, false);
+        Serial.println("");
+        Serial.println(res);
+
+        if (find_text("SEND OK", res) != -1) {
+            lcdPrint("Package Sent!", 0, 2000, false);
+        } else {
+            lcdPrint("Unable to send", 0, 2000, true);
+            flush(Wifi);
+        }
     } else {
-        lcdPrint("Unable to connect restarting the module", 0, 2000, true);
+        lcdPrint("Conn Problems", 0, 2000, false);
         resetWifi();
         connectWifi();
     }
 }
 
-/* Use if you do not need the return in the Module's Serial Window' */
-String ATCommand(String command, const int timeout, bool debug) {
+String ATCommand(String command, String type, const int timeout, bool debug) {
     // Send AT command to the module
-    lcdPrint("Sending command", 0, 2000, true);
+    lcdPrint("Sending command!", type, 0, false);
     String response = "";
-    Wifi.flush();
+    flush(Wifi);
     Wifi.print(command.c_str());
     long int cur_time = millis();
     while (cur_time + timeout > millis()) {
@@ -200,11 +219,34 @@ String ATCommand(String command, const int timeout, bool debug) {
         }
     }
     if (debug) {
-        Serial.print(response);
+        Serial.println(response);
     }
     return response;
 }
 
+bool checkAlive() {
+    bool retVal = false;
+    flush(Wifi);
+    String cmd = "AT\r\n";
+    Wifi.print(cmd);
+    delay(3000);
+
+    retVal = Wifi.find("OK");
+
+    return retVal;
+}
+
+void hardReset() {
+    lcdPrint("Hardware Reset", "Pin 10", 2000, false);
+    digitalWrite(PIN_RST, LOW);
+    delay(2000);
+    digitalWrite(PIN_RST, HIGH);
+    delay(1000); 
+}
+
+/* -------------------------------------------------------------------------- */
+/* LCD Screen API */
+/* -------------------------------------------------------------------------- */
 void lcdSetup()
 {
   lcd.begin(ncols, nrows);
@@ -235,8 +277,7 @@ void printScreen(float avg, int spl) {
     }
     lcd.setCursor(5, 1);
     lcd.print(spl);
-    lcd.print("dB ");
-    lcd.print(count);
+    lcd.print("dB");
 }
 
 void sendScreen() {
@@ -269,4 +310,21 @@ void lcdPrint(String fst, String snd, int timeout, bool clean) {
     if (clean) {
         lcd.clear();
     }
+}
+
+void flush(SoftwareSerial serial) {
+    while (serial.available() > 0) {
+        char gbg = serial.read();
+    }
+}
+
+int find_text(String needle, String haystack) {
+    int foundpos = -1;
+    for (int i=0; i<=haystack.length() - needle.length(); i++) {
+        if (haystack.substring(i,needle.length()+i) == needle) {
+            foundpos = i;
+            break;
+        }
+    }
+    return foundpos;
 }

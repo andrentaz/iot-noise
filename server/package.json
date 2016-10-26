@@ -3,10 +3,6 @@
   "version": "1.0.0",
   "description": "simples server to post json files into csv files",
   "main": "server.js",
-  "scripts": {
-    "test": "node server.js",
-    "start": "node server.js"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/andrentaz/iot-noise.git"

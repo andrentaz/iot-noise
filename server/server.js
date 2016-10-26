@@ -27,10 +27,7 @@ function callback_csv (req, res) {
     fs.appendFile(filepath, content, function (err) {
         if (err) {
             // send error response to client
-            res.send (JSON.stringify({
-                file: req.body.id,
-                status: err
-            }));
+            res.send (JSON.stringify(err));
             
             // return
             return console.log(err);
