@@ -10,11 +10,13 @@
 // Data
 #define ID "1"
 
+// Debug option
 #define DEBUG true
 
 // Constants
 const double VBASE = 0.1919052878;
 const int SAMPLE = 100;
+const int MAX = 50;
 const int ncols = 16;
 const int nrows = 2;
 
@@ -32,7 +34,7 @@ float avgSpl = 0.0;
 SoftwareSerial Wifi(PIN_RX,PIN_TX);
 
 // LCD
-LiquidCrystal lcd (9,8,7,6,5,4); 
+LiquidCrystal lcd(9,8,7,6,5,4); 
 
 void setup() {
     // begin the serials connections
@@ -58,12 +60,7 @@ void loop() {
         sendScreen();
         Serial.flush();
         lcdPrint("Sending...", 0, 2000, true);
-        if (checkAlive()) {
-            sendToServer(spl);
-        } else {
-            hardReset();
-            connectWifi();
-        }
+        sendToServer(spl);
         count = 0;
     } else {
         // write in the lcd
@@ -102,8 +99,6 @@ float calculateDecibels(float value) {
 /* ESP8266 API */ 
 /* -------------------------------------------------------------------------- */
 void resetWifi(void) {
-    digitalWrite(PIN_RST, HIGH);
-    delay(1000);
     ATCommand("AT+RST\r\n", "RST", 5000, DEBUG);
     ATCommand("AT+CWMODE=1\r\n", "CWMODE=1", 3000, DEBUG);
     ATCommand("AT+CIPMUX=0\r\n", "CIPMUX=0", 3000, DEBUG);
@@ -190,15 +185,8 @@ void sendToServer(float value) {
             flush(Wifi);
         }
         
-        String res = ATCommand("AT+CIPCLOSE\r\n", "CIPCLOSE", 5000, false);
-        Serial.println("");
-        Serial.println(res);
+        ATCommand("AT+CIPCLOSE\r\n", "CIPCLOSE", 5000, DEBUG);
 
-        if (find_text("SEND OK", res) != -1) {
-            lcdPrint("Package Sent!", 0, 2000, false);
-        } else {
-            lcdPrint("Unable to send", 0, 2000, true);
-            flush(Wifi);
         }
     } else {
         lcdPrint("Conn Problems", 0, 2000, false);
@@ -225,26 +213,6 @@ String ATCommand(String command, String type, const int timeout, bool debug) {
         Serial.println(response);
     }
     return response;
-}
-
-bool checkAlive() {
-    bool retVal = false;
-    flush(Wifi);
-    String cmd = "AT\r\n";
-    Wifi.print(cmd);
-    delay(3000);
-
-    retVal = Wifi.find("OK");
-
-    return retVal;
-}
-
-void hardReset() {
-    lcdPrint("Hardware Reset", "Pin 10", 2000, false);
-    digitalWrite(PIN_RST, LOW);
-    delay(2000);
-    digitalWrite(PIN_RST, HIGH);
-    delay(1000); 
 }
 
 /* -------------------------------------------------------------------------- */
@@ -319,15 +287,4 @@ void flush(SoftwareSerial serial) {
     while (serial.available() > 0) {
         char gbg = serial.read();
     }
-}
-
-int find_text(String needle, String haystack) {
-    int foundpos = -1;
-    for (int i=0; i<=haystack.length() - needle.length(); i++) {
-        if (haystack.substring(i,needle.length()+i) == needle) {
-            foundpos = i;
-            break;
-        }
-    }
-    return foundpos;
 }
