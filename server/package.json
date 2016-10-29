@@ -19,5 +19,8 @@
   "bugs": {
     "url": "https://github.com/andrentaz/iot-noise/issues"
   },
-  "homepage": "https://github.com/andrentaz/iot-noise#readme"
+  "homepage": "https://github.com/andrentaz/iot-noise#readme",
+  "dependencies": {
+    "moment": "^2.15.2"
+  }
 }
