@@ -25,7 +25,8 @@ const String SERVER_ADDR = "192.168.0.3";
 const long SERVER_PORT = 8080;
 
 // Global
-int count = 0;
+int count = 1;
+float avgSpl = 0.0;
 
 // Network
 SoftwareSerial Wifi(PIN_RX,PIN_TX);
@@ -53,7 +54,7 @@ void loop() {
     float spl = calculateDecibels(avg);
 
     // send data to the server
-    if (count > 50) {
+    if (count > MAX+1) {
         sendScreen();
         Serial.flush();
         lcdPrint("Sending...", 0, 2000, true);
@@ -67,6 +68,9 @@ void loop() {
     } else {
         // write in the lcd
         printScreen(avg, floor(spl));
+
+        // save the average
+        avgSpl += abs(avgSpl - spl)/count;
     }
     count++;
 }
@@ -138,9 +142,8 @@ void sendToServer(float value) {
         // prepare JSON data
         json = "{\"id\":\"";
         json += ID;
-        json += "\",\"vreff\":\"" + vreff;
-        json += "\",\"tmp\":\"";
-        json += millis();
+        json += "\",\"vreff\":\"";
+        json += vreff;
         json += "\",\"spl\":\"";
         json += valueStr;
         json += "\"}";

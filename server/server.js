@@ -6,6 +6,7 @@
 var express = require('express');
 var bodyParser = require('body-parser');
 var fs = require('fs');
+var moment = require('moment');
 
 // Server setup
 var app = express();
@@ -14,10 +15,15 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // callback for post to upload
 function callback_csv (req, res) {
+    // get the timestamp
+    var timestmp = moment();
+
+    // get the attibutes 
     var id = req.body.id;
     var vreff = req.body.vreff;
-    var tmp = req.body.tmp;
     var spl = req.body.spl;
+    var tmp = timestmp.format().split('T').join(' ');
+
 
     // create the line
     var content = [id, vreff, tmp, spl].toString() + "\n";
