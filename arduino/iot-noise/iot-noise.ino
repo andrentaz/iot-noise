@@ -8,22 +8,22 @@
 #define PIN_TX 3    // TX pin of arduino
 #define PIN_RST 10  // Reset pin of ESP8266
 // Data
-#define ID "1"
+#define ID "2"
 
 // Debug option
 #define DEBUG true
 
 // Constants
-const double VBASE = 0.1919052878;
+const double VBASE = 1.941397087;
 const int SAMPLE = 100;
 const int MAX = 50;
 const int ncols = 16;
 const int nrows = 2;
 
 // Network
-const String WLAN_SSID = "SSID";
-const String WLAN_PASS = "PASS";
-const String SERVER_ADDR = "192.168.0.3";
+const String WLAN_SSID = "filliettaz";
+const String WLAN_PASS = "20081991";
+const String SERVER_ADDR = "192.168.0.7";
 const long SERVER_PORT = 8080;
 
 // Global
@@ -34,7 +34,23 @@ float avgSpl = 0.0;
 SoftwareSerial Wifi(PIN_RX,PIN_TX);
 
 // LCD
-LiquidCrystal lcd(9,8,7,6,5,4); 
+LiquidCrystal lcd(9,8,7,6,5,4);
+
+/* Pragmas */
+void setup();
+void loop();
+float soundSampling(int);
+float calculateDecibels(float);
+void resetWifi();
+void connectWifi();
+void sendToServer(float);
+String ATCommand(String, String, const int, bool);
+void lcdSetup();
+void sendScreen();
+void printScreen(float, int);
+void lcdPrint(String, int, int, bool);
+void lcdPrint(String, String, int, bool);
+void flush(SoftwareSerial);
 
 void setup() {
     // begin the serials connections
@@ -58,7 +74,6 @@ void loop() {
     // send data to the server
     if (count > MAX+1) {
         sendScreen();
-        Serial.flush();
         lcdPrint("Sending...", 0, 2000, true);
         sendToServer(spl);
         count = 0;
@@ -98,7 +113,8 @@ float calculateDecibels(float value) {
 /* -------------------------------------------------------------------------- */
 /* ESP8266 API */ 
 /* -------------------------------------------------------------------------- */
-void resetWifi(void) {
+void resetWifi() {
+    flush(Wifi);
     ATCommand("AT+RST\r\n", "RST", 5000, DEBUG);
     ATCommand("AT+CWMODE=1\r\n", "CWMODE=1", 3000, DEBUG);
     ATCommand("AT+CIPMUX=0\r\n", "CIPMUX=0", 3000, DEBUG);
@@ -115,6 +131,7 @@ void sendToServer(float value) {
     String valueStr = "";
     String vreff = "";
     String json = "";
+
     valueStr += value;
     vreff += VBASE;
 
@@ -172,7 +189,6 @@ void sendToServer(float value) {
             lcdPrint("Sending...", millis(), 2000, false);
 
             // Send data
-            // ATCommand(postRequest, "POST", 20000, DEBUG);
             Wifi.print(postRequest);
             delay(20000);
 
@@ -186,8 +202,6 @@ void sendToServer(float value) {
         }
         
         ATCommand("AT+CIPCLOSE\r\n", "CIPCLOSE", 5000, DEBUG);
-
-        }
     } else {
         lcdPrint("Conn Problems", 0, 2000, false);
         resetWifi();
@@ -285,6 +299,6 @@ void lcdPrint(String fst, String snd, int timeout, bool clean) {
 
 void flush(SoftwareSerial serial) {
     while (serial.available() > 0) {
-        char gbg = serial.read();
+        serial.read();
     }
 }
