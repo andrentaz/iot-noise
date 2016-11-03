@@ -6,9 +6,9 @@
 #define PIN_MIC A0
 #define PIN_RX 2    // RX pin of arduino
 #define PIN_TX 3    // TX pin of arduino
-#define PIN_RST 10  // Reset pin of ESP8266
+#define PIN_RST 10  // RST pin
 // Data
-#define ID "2"
+#define ID "3"
 
 // Debug option
 #define DEBUG true
@@ -58,10 +58,15 @@ void setup() {
     Wifi.begin(9600);
     lcdSetup();
 
+    // Pin modes
+    pinMode(PIN_MIC, INPUT);
+    pinMode(PIN_RST, OUTPUT);
+
     while (!Serial);
     lcdPrint("Connecting...", 0, 2000, true);
     resetWifi();
     connectWifi();
+    Serial.println("End setup");
 }
 
 void loop() {
@@ -115,7 +120,10 @@ float calculateDecibels(float value) {
 /* -------------------------------------------------------------------------- */
 void resetWifi() {
     flush(Wifi);
-    ATCommand("AT+RST\r\n", "RST", 5000, DEBUG);
+    digitalWrite(PIN_RST, LOW);
+    delay(1000);
+    digitalWrite(PIN_RST, HIGH);
+    delay(500);
     ATCommand("AT+CWMODE=1\r\n", "CWMODE=1", 3000, DEBUG);
     ATCommand("AT+CIPMUX=0\r\n", "CIPMUX=0", 3000, DEBUG);
 }
