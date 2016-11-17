@@ -1,21 +1,34 @@
+/*
+ * IoT Noise
+ * copyright (c) Andre Filliettaz, 2016
+ * 
+ * Released under GLv3.
+ * Please refer to LICENSE file for licensing information.
+ *
+ * Reference:
+ * SPL meter - Davide Girone: http://davidegironi.blogspot.com.br/2014/02/a-simple-sound-pressure-level-meter-spl.html#.WCxnlHUrK03
+ * ESP8266   - FilipeFlop: http://blog.filipeflop.com/wireless/esp8266-arduino-tutorial.html 
+ */
 #include <SoftwareSerial.h>
 #include <LiquidCrystal.h>
 
+#include "adc.h"
+#include "audioget.h"
+
 // Definitions
 // Pins
-#define PIN_MIC A0
 #define PIN_RX 2    // RX pin of arduino
 #define PIN_TX 3    // TX pin of arduino
 #define PIN_RST 10  // RST pin
+
 // Data
-#define ID "3"
+#define ID "4"
 
 // Debug option
 #define DEBUG true
 
 // Constants
-const double VBASE = 1.941397087;
-const int SAMPLE = 100;
+const int WINDOW = 50;
 const int MAX = 50;
 const int ncols = 16;
 const int nrows = 2;
@@ -23,34 +36,14 @@ const int nrows = 2;
 // Network
 const String WLAN_SSID = "filliettaz";
 const String WLAN_PASS = "20081991";
-const String SERVER_ADDR = "192.168.0.7";
+const String SERVER_ADDR = "192.168.0.6";
 const long SERVER_PORT = 8080;
-
-// Global
-int count = 1;
-float avgSpl = 0.0;
 
 // Network
 SoftwareSerial Wifi(PIN_RX,PIN_TX);
 
 // LCD
 LiquidCrystal lcd(9,8,7,6,5,4);
-
-/* Pragmas */
-void setup();
-void loop();
-float soundSampling(int);
-float calculateDecibels(float);
-void resetWifi();
-void connectWifi();
-void sendToServer(float);
-String ATCommand(String, String, const int, bool);
-void lcdSetup();
-void sendScreen();
-void printScreen(float, int);
-void lcdPrint(String, int, int, bool);
-void lcdPrint(String, String, int, bool);
-void flush(SoftwareSerial);
 
 void setup() {
     // begin the serials connections
@@ -59,7 +52,6 @@ void setup() {
     lcdSetup();
 
     // Pin modes
-    pinMode(PIN_MIC, INPUT);
     pinMode(PIN_RST, OUTPUT);
 
     while (!Serial);
@@ -70,49 +62,55 @@ void setup() {
 }
 
 void loop() {
-    // read the value from the mic
-    float avg = soundSampling(PIN_MIC);
+    // count and average spl
+    int count = 1;
+    double avgSpl = 0.0;
 
-    // convert it to dB value
-    float spl = calculateDecibels(avg);
+    // get current reference voltage
+    double refv = adc_getrealvref();
 
-    // send data to the server
-    if (count > MAX+1) {
-        sendScreen();
-        lcdPrint("Sending...", 0, 2000, true);
-        sendToServer(spl);
-        count = 0;
-    } else {
-        // write in the lcd
-        printScreen(avg, floor(spl));
+    int16_t audiorms = 0;
+    int16_t audiospl = 0;
 
-        // save the average
-        avgSpl += abs(avgSpl - spl)/count;
+    // input channel is setted to 0
+    audioget_init();
+
+    while(true) {
+        // get samples
+        audioget_getsamples();
+        // compute fft
+        audioget_computefft();
+        // apply weighting
+        audioget_doweighting();
+        
+        // get rms and spl
+        audiorms = audioget_getrmsval();
+        float rmsvolts = 0;
+
+        if (audiorms <= 0) {
+            rmsvolts = AUDIOGET_VOLTREF;
+        } else {
+            rmsvolts = adc_getvoltage(audiorms, refv);
+        }
+
+        audiospl = audioget_getspl(rmsvolts, AUDIOGET_VOLTREF, AUDIOGET_DBREF);
+
+        // send data to the server
+        if (count > MAX+1) {
+            sendScreen();
+            lcdPrint("Sending...", 0, 2000, true);
+            sendToServer(avgSpl);
+            count = 0;
+            avgSpl = 0;
+        } else {
+            // write in the lcd
+            printScreen(audiospl, floor(audiospl));
+
+            // save the average
+            avgSpl += abs(avgSpl - audiospl)/count;
+        }
+        count++;
     }
-    count++;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Sound functions */
-/* -------------------------------------------------------------------------- */
-/* Read a <SAMPLE> values from the mic and calculate the avarage */
-float soundSampling(int anPort) {
-    float avg = 0.0f;
-    int value = 0;
-
-    for (int i=0; i<SAMPLE; i++) {
-        value = analogRead(anPort);
-        avg += abs(value - 511);
-        delay(3);
-    }
-
-    return avg/SAMPLE;
-}
-
-/* Convert a certain voltage value to decibels */
-float calculateDecibels(float value) {
-    float vreff = (value/VBASE);
-    return (20 * log10(vreff));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -137,12 +135,14 @@ void connectWifi() {
 
 void sendToServer(float value) {
     String valueStr = "";
-    String vreff = "";
+    String vref;
+    String dbref;
     String json = "";
 
     valueStr += value;
-    vreff += VBASE;
-
+    vref += AUDIOGET_VOLTREF;
+    dbref += AUDIOGET_DBREF;
+    
     lcdPrint("SPL: " + valueStr, 0, 2000, true);
 
     // Start the connection
@@ -162,8 +162,10 @@ void sendToServer(float value) {
         // prepare JSON data
         json = "{\"id\":\"";
         json += ID;
-        json += "\",\"vreff\":\"";
-        json += vreff;
+        json += "\",\"vref\":\"";
+        json += vref;
+        json += "\",\"dbref\":\"";
+        json += dbref;
         json += "\",\"spl\":\"";
         json += valueStr;
         json += "\"}";

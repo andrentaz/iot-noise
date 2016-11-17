@@ -20,13 +20,14 @@ function callback_csv (req, res) {
 
     // get the attibutes 
     var id = req.body.id;
-    var vreff = req.body.vreff;
+    var vref = req.body.vref;
+    var dbref = req.body.dbref;
     var spl = req.body.spl;
     var tmp = timestmp.format().split('T').join(' ');
 
 
     // create the line
-    var content = [id, vreff, tmp, spl].toString() + "\n";
+    var content = [id, tmp, vref, dbref, spl].toString() + "\n";
     var filepath = 'csv/upload/' + id + ".csv";
 
     // write the file
