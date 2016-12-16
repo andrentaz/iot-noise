@@ -27,7 +27,7 @@
 #define PIN_RST 10  // RST pin
 
 // Data
-#define ID "5"
+#define ID "7"
 
 // Debug option
 #define DEBUG true
@@ -42,7 +42,7 @@ const int nrows = 2;
 // Network
 #define WLAN_SSID "filliettaz"
 #define WLAN_PASS "20081991"
-#define SERVER_ADDR "192.168.0.6"
+#define SERVER_ADDR "192.168.43.179"
 #define SERVER_PORT 8080
 
 // Network
@@ -109,7 +109,7 @@ void loop() {
         float rmsvolts = 0;
 
         if (audiorms <= 0) {
-            rmsvolts = AUDIOGET_VOLTREF;
+            rmsvolts = 1e37;
         } else {
             rmsvolts = adc_getvoltage(audiorms, refv);
         }
@@ -255,7 +255,7 @@ void sendToServer(String value) {
             Wifi.print(value);
             Wifi.print("}");            
             Wifi.print("\r\n\r\n");
-            delay(20000);
+            delay(10000);
 
             // Log the ending
             #ifdef LCD

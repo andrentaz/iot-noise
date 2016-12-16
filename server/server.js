@@ -33,7 +33,7 @@ function cb_postcsv (req, res) {
     var content = '';
     var filepath = 'csv/upload/' + id + ".csv";
 
-    var stime = timestamp;
+    var stime = timestamp.subtract(20, 's');
     for (var i = tmvlist.length-1; i > 0; i--) {
         // get the variables
         var valdb = tmvlist[i];

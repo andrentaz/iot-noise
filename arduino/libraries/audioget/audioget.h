@@ -81,8 +81,8 @@ volatile int16_t audioget_fi[AUDIOGET_SAMPLES];
 
 // INPUT hardware setup ----------------
 //define voltage reference and spl db reference
-#define AUDIOGET_VOLTREF 0.03008496 //0.000126 //0.000315
-#define AUDIOGET_DBREF 45 //38 //30
+#define AUDIOGET_VOLTREF 0.022916  //0.03008496 //0.000126 //0.000315
+#define AUDIOGET_DBREF 72 //45 //38 //30
 /* transfer factor, see http://www.sengpielaudio.com/calculator-transferfactor.htm
 Referenz 94db/1VPa
 Sensitivity = 20 × log (transfer factor in mV/Pa)
